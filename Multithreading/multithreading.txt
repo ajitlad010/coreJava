@@ -869,4 +869,541 @@ class ThreadLocalDemo {
 
 -----------------------------------------------------------------------------------------
 
+Other notes : 
+Spring :
+1. Bean scopes : singleton, prototype, request, session, global
+
+Default : SingleTon
+@Autowired : Default type is byType (if more beans of same type defined then exception will be thrown)
+
+
+Singleton :
+
+<bean id="employee1" class = "com.ajit.Employee" scope="singleton">
+</bean>
+<bean id="employee2" class = "com.ajit.Employee" scope="singleton">
+</bean>
+
+How many beans will get created ? - 2
+If class Employee is singleton then how many beans will get created ? - 2
+
+---------------------------------------------------------------------------------
+2. Dependency Injection : 
+a. Dependency Injection using Constructor way:
+<bean id = "employee" class = "com.javatpoint.Employee">
+	<constructor-arg type="int" value = "20"></constructor-arg>
+	<constructor-arg value = "ajit"></constructor-arg>
+</bean>
+
+
+b. Using list/map in bean creation (Setter Way)  :
+
+<bean id="employee" class = "com.javatpoint.Employee" scope="prototype">
+		<property name="id" value="1"></property>
+		<property name="departments">
+			<list>
+				<value>"JAVA"</value>
+			</list>
+		</property>
+		<property name="skillSet">
+			<map>
+				<entry key="1" value="JAVA"/>
+			</map>
+		</property>
+	</bean>
+
+c. Autowied : 
+Types : 	1. byName
+		2. byType (only one child bean of same type is created, if multiple beans of same type are present then exception will be thrown)
+		3. constructor
+
+<bean id = "employee"  class="com.javatpoint.Employee" autowire="byName">
+</bean>
+<bean id = "employeeDetails" class="com.javatpoint.EmployeeDetails">
+	<property name="address" value="Pune"></property>
+</bean>
+
+--------------------------------------------------------------------------------
+3. Bean lifecycle
+
+Interfaces :
+a. initializing bean (AbstractApplicationContext) :
+	override afterpropertiesset method
+	registershutdownhook-> destroy is called
+b. DisposableBean
+	override destroy() method
+c. init-method="myInit" in config xml file
+d. destroy-method="myDestroy" in config xml file
+e. to add init destroy method at global level
+	<beans default-init-method = "myInit" default-destroy-method="myDestroy">
+	</beans>
+f. Order of execution of initializing bean and init methods
+	1. initializing bean-> properties Set
+	2. init - myInit method
+	3. Disposal Bean-> destroy method
+	4. destroy - myDestroy method
+
+g. BeanPostProcessor interface : Executes after/before every bean initializes
+	1. PostProcessAfterInitialization(Object bean, String beanName)
+	2. PostProcessBeforeInitialization(Object bean, String beanName)
+
+h. BeanFactoryPostProcessor interface : Executes After Bean factory initializes (Though we are using applicationContext still works as ApplicationContext built upon the build factory)
+	1. postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory)
+
+i. To read property from other properties file
+	"${pointA.pointX}"
+<bean class="org.springframework.beans.factory.config.propertyPlaceHolderConfigurer">
+	<property name = "locations" value="pointsConfig.properties"/>
+</bean>
+j. ApplicationContextAware interface :
+	Provides context in Bean by overriding method setApplicationContext(ApplicationContext args0)
+--------------------------------------------------------------------------------
+4. Some useful annotations:
+a. @Required  (Requires BeanPostProcessor bean in xml file as this does the background validation)
+	to validate the bean 
+b. @Autowired
+	first try to find bean byType and then byName (if multiple beans of same name present in spring.xml file then exception)
+c. @Qualifier
+	if there are multiple beans of same type then use qualifier annotation so that context will inject bean byName
+d. @Resource (JSR annotation)
+	Injection by Name
+	syntax : @Resource(name="employeeDetails")
+
+e. @PostConstruct
+f.  @PreDestroy
+g. @Component :
+	to consider a class as bean (used at class level)
+--------------------------------------------------------------------------------
+Spring AOP : 
+Steps: 
+1. add 5 jars: Aspectjrt, aspectweaver, cglib, Aopalliance, asm
+2. Aspect contains no. of advices
+3. Convert standard class into aspect class : @Aspect
+	<aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+	Before method execution
+Annotations :
+
+1. Before method of this name : 
+	@Before("execution(public String getName())")
+2. Only for getname method of circle class
+	@Before("execution(public String com.ajit.Circle.getName())")
+
+
+2. PointCuts and WildCards:
+	wildcard : 
+	@Before("execution(public * get*())")  <---  PointCuts defining for advices
+	Will run advice before any return type , but method name starts with get
+	
+	@Pointcut("execution(* get*())")
+	public void allGetters() {}
+	Use "allGetters"(which is created as dummy method to use as pointcut for all point cuts)  as pointcut expression to match multiple adivces
+	@Before("allGetters")
+	public void testGetter() {
+		sysout("A");
+	}
+
+	@Pointcut("within(com.ajit.Circle)")
+	public void allCircleMethods() {}
+	Use allCircleMethods as point cut to run all methods within class circle
+
+JoinPoint : 
+1. That prints the details of the method which is getting executed (joinPoint.toString())
+2. target : That gets the Object of which method is getting executed
+		
+public void LoggingAdvice(JoinPoint joinPoint) {
+	System.out.println(joinPoint.toString())
+}
+@Before("args(name)")		<== to get the parameter value which we are passing (pointcut  -> all method that takes argument as => name)
+public voif setMethodAdvice(String name) {
+	System.out.println("Set method called , value is " + name)
+}
+
+	@After("args(name)")
+	executes after method
+	
+	@AfterReturning("args(name)")
+	executes after method if it executes without any exception
+
+	@AfterReturning(pointcut="args(name)", returning="returnString")		//executes after method those which sets argument name  and returns string
+	public void setMethodAdvice(String name, String returnString) {
+		System.out.println("Value + " name + "return string value : " + returnString);		
+	}
+
+	
+	@AfterThrowing("args(name)")
+	executes after throwing exception , can catch exception here also
+	@AfterThrowing(pointcut= "args(name)", throwing="ex") 	// can get the exception here also
+	
+	@Around("allGetters")						// gets executed before and after execution of method
+	public void myAroundAdvice(ProceedingJoinPoint proceedingJoinPoint) {
+		try {
+			System.out.println("Before advice");
+			proceedingJoinPoint.proceed();			// can get the return value of executing method using Object return = proceedingJoinPoint.proceed();
+			System.out.println("After advice");
+		} catch (Exception e) {
+			System.out.println(e);
+		} 
+		System.out.println("MyAround Advice");
+	}
+	
+	
+--------------------------------------------------------------------------------
+5. Spring transaction Management
+	a) Transaction propogation :
+		1. Required: Code will always run in a transaction. Creates a new transaction or reuses one if available.
+		2. Requires_new: Code will always run in a new transaction. Suspends the current transaction if one exists.
+		3. Mandatory : method must run within a transaction. If no existing transaction is in progress, an exception will be thrown
+		4. Not_Supported : If DataSourceTransactionObject T1 is already started for Method M1.If another method M2 is run concurrently .
+						Then M2 should not run within transaction context. T1 is suspended till M2 is finished.
+		5. Never : None of the methods run in transaction context.
+
+	b) Scenarios :
+	a. Dirty reads - If T1 transaction reads data from table A1 that was written by another concurrent transaction T2.If on the way T2 is rollback,the data obtained by T1 is invalid one
+	b. Non repeatable reads - If T1 transaction reads data from table A1.If another concurrent transaction(T2) update data on table A1.Then the data that T1 has read is different from table A1
+	c. Phantom reads - If T1 transaction reads data from table A1 with certain number of rows. If another concurrent transaction(T2) inserts more rows on table A1
+
+	c) isolation levels :
+	1. ISOLATION_READ_UNCOMMITTED 
+	2. ISOLATION_READ_COMMITTED
+	3. ISOLATION_REPEATABLE_READ
+	4. ISOLATION_SERIALIZABLE
+
+--------------------------------------------------------------------------------
+context.registershutdownhook();
+- for registering shut down hook , this invokes when main method gets completed it calls destroy method for clean up.
+--------------------------------------------------------------------------------
+Bean inheritance : The child bean automatically inherits the properties from parent bean.
+ Below example, childTriangle inherits pointA from parent.
+
+  <bean id = "parentTriangle" class = "com.ajit.Triangle">
+      <property name = "pointA" ref="pointOne"/>
+   </bean>
+
+   <bean id ="childTriangle" class = "com.ajit.Triangle" parent = "parentTriangle">
+      <property name = "pointB" value = "pointTwo"/>
+   </bean>
+
+--------------------------------------------------------------------------------
+<context:annotation-config/> to use annotation based spring
+
+
+
+
+
+
+Hibernate :
+
+@Transactional(readOnly = false, rollbackFor = Exception.class)
+
+
+One to one example :
+
+Employee class : 
+@OneToOne(fetch = FetchType.LAZY, cascade =  CascadeType.ALL)
+@JoinColumn(name="profile_Id", referencedColumnName="id")
+ private Profile profile;
+
+
+Profile class:
+@OneToOne(mappedBy = "profile")
+private Employee employee;
+----------------------------------------------------------------------------------------------------------
+One to many example
+
+Employee class : 
+@OneToMany(mappedBy = "employee", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+private Set<EmployeeAddress> addressList;
+
+EmployeeAddress class :
+@ManyToOne(fetch = FetchType.LAZY, optional = false)
+ @JoinColumn(name = "emp_id", nullable = false)
+private Employee employee;
+
+
+add below annotations to ignore errors:
+@JsonIgnore
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+
+
+
+
+----------------------------------------------------------------------------------------------------------
+Custome query :
+
+@Query("SELECT e FROM Employee e LEFT JOIN e.profile "
+			+ " LEFT JOIN e.addressList WHERE LOWER(e.name) = LOWER(:name)")
+	public Employee findEmployeeDetails(@Param("name") String name);
+
+
+--------------------------------------------------------------------------------------------------------
+cache implementation:
+1. add dependency
+<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.sf.ehcache</groupId>
+            <artifactId>ehcache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>javax.cache</groupId>
+            <artifactId>cache-api</artifactId>
+        </dependency>
+
+2.  add ehcache.xml
+
+<ehcache>
+    <diskStore path="java.io.tmpdir" />
+ 
+    <defaultCache maxElementsInMemory="2000"
+            eternal="true"
+            overflowToDisk="false"
+            timeToLiveSeconds="1200" />
+             
+    <cache name="employeeCache"
+            maxElementsInMemory="2000"
+            eternal="false"
+            overflowToDisk="false"
+            timeToLiveSeconds="10000" />
+</ehcache>
+
+
+
+3. create config class CacheConfig :
+
+@Configuration
+@EnableCaching
+public class CacheConfig {
+ 
+}
+
+
+4. annotate method with cacheable
+
+@Cacheable(cacheNames="employeeCache", key="#name")
+
+--------------------------------------------------------------------------------------------------------
+
+spring jdbc 
+
+1. public int update(String query)
+	used to insert, update and delete records
+	 String query="insert into employee values(  
+    '"+e.getId()+"','"+e.getName()+"','"+e.getSalary()+"')";  
+    return jdbcTemplate.update(query);
+
+2. public int update(String query,Object... args)
+	used to insert, update and delete records using PreparedStatement using given arguments.
+String query="update employee set name=? where id=?";  
+return template.update(query,e.getName(),e.getId());  
+
+3. public void execute(String query)
+	used to execute DDL query.
+
+4. public T execute(String sql, PreparedStatementCallback action)
+	executes the query by using PreparedStatement callback.
+	String query="insert into employee values(?,?,?)";  
+    return jdbcTemplate.execute(query,new PreparedStatementCallback<Boolean>(){  
+    @Override  
+    public Boolean doInPreparedStatement(PreparedStatement ps)  
+            throws SQLException, DataAccessException {  
+              
+        ps.setInt(1,e.getId());  
+        ps.setString(2,e.getName());  
+        ps.setFloat(3,e.getSalary());  
+              
+        return ps.execute();  
+              
+    }  
+    })
+
+5. public T query(String sql, ResultSetExtractor rse)	
+	used to fetch records using ResultSetExtractor.
+	 return template.query("select * from employee",new ResultSetExtractor<List<Employee>>(){  
+    @Override  
+     public List<Employee> extractData(ResultSet rs) throws SQLException,  
+            DataAccessException {  
+      
+        List<Employee> list=new ArrayList<Employee>();  
+        while(rs.next()){  
+        Employee e=new Employee();  
+        e.setId(rs.getInt(1));  
+        e.setName(rs.getString(2));  
+        e.setSalary(rs.getInt(3));  
+        list.add(e);  
+        }  
+        return list;  
+        }  
+    });  
+  } 
+
+6. public List query(String sql, RowMapper rse)
+	used to fetch records using RowMapper.
+	return template.query("select * from employee",new RowMapper<Employee>(){  
+    @Override  
+    public Employee mapRow(ResultSet rs, int rownumber) throws SQLException {  
+        Employee e=new Employee();  
+        e.setId(rs.getInt(1));  
+        e.setName(rs.getString(2));  
+        e.setSalary(rs.getInt(3));  
+        return e;  
+    }  
+    });  
+}  
+
+--------------------------------------------------------------------------------------------------------
+
+spring jdbc examples in proj:
+
+in properties mention user name , pass, url
+@Bean(name="jdbcTemplate")
+Public DataSource sybaseDataSource() {
+	DataSourceBuilder dataSource = DatasourceBuilder.create().driveClassName(dbDrive).url(dbUrl).username(userName).password(password);
+	return dataSource.build();
+}
+
+
+
+1. For insert :
+MapSqlParameterSource parameters = new MapSqlParameterSource()
+.addValue("id", 1)
+.addValue("name", "ajit");
+final KeyHolder holder = new GeneratedKeyHolder();
+this.oracleNamedParameterJdbcTemplate.update(Query , parameters, holder, new String[] { "id" });
+Long id = holder.getKey() != null ? holder.getKey().longValue() : 0;
+
+2. For get
+jdbcTemplate.queryForObject("select * from employee where id = ?", new Object[]{id}, new RowMapper<Employee>() {
+@Override
+public Employee mapRow(Resultset rs, int rownumber) throws SqlException {
+		Employee e = new Employee();
+		e.setId(rs.getLong(1));
+		e.setName(rs.getString(2));
+		return e;
+	}
+});
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+@Immutable
+used for rad only tables
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Optimistic locking
+In this locking, the concurrent changes are avoided by using the versioning object. Version checks the version numbers or the timestamps to detect conflicting updates and to prevent lost updates.
+
+
+
+nth highest salary in sql :
+SELECT name, salary FROM #Employee e1 WHERE 3-1 = (SELECT COUNT(DISTINCT salary) FROM #Employee e2 WHERE e2.salary > e1.salary)
+
+
+
+
+=====================================================================================================
+Java :
+
+1. Singleton :
+	1. Prevent from threadSafety : using synchronized method getInstance
+2. Bucket :
+
+3. Segment :
+
+4. Load Factor:
+	Default load factor for hash map is 0.75
+	16*0.75 = 12 
+	When 13th element is inserted into hashmap it creates new hash map and re hashing will be done
+--------------------------------------------------------------------------------------------------------------------------------
+memory leak in Java - where memory is retained even if it's not required
+
+Read more: https://javarevisited.blogspot.com/2011/10/how-substring-in-java-works.html#ixzz6vPwzjybM
+
+
+public String substring(int beginIndex) {
+        if (beginIndex < 0) {
+            throw new StringIndexOutOfBoundsException(beginIndex);
+        } else {
+            int subLen = this.length() - beginIndex;
+            if (subLen < 0) {
+                throw new StringIndexOutOfBoundsException(subLen);
+            } else if (beginIndex == 0) {
+                return this;
+            } else {
+                return this.isLatin1() ? StringLatin1.newString(this.value, beginIndex, subLen) : StringUTF16.newString(this.value, beginIndex, subLen);
+            }
+        }
+    }
+	
+	public static String newString(byte[] val, int index, int len)
+	
+https://www.geeksforgeeks.org/java-substring-method-memory-leak-issue-and-fix/
+-----------------------------------------------------------------------------------------------------------
+
+
+arrays - copyOfRange?
+
+BeanProperty ?
+
+
+
+-----------------------------------------------------------------------------------------------------------
+
+Another way to solve the problem is method injection with the @Lookup annotation:
+
+@Component
+public class SingletonLookupBean {
+
+    @Lookup
+    public PrototypeBean getPrototypeBean() {
+        return null;
+    }
+}
+
+
+Spring will override the getPrototypeBean() method annotated with @Lookup. It then registers the bean into the application context. Whenever we request the getPrototypeBean() method, it returns a new PrototypeBean instance.
+
+It will use CGLIB to generate the bytecode responsible for fetching the PrototypeBean from the application context.
+
+
+5. javax.inject API
+The setup along with required dependencies are described in this Spring wiring article.
+
+Here's the singleton bean:
+
+public class SingletonProviderBean {
+
+    @Autowired
+    private Provider<PrototypeBean> myPrototypeBeanProvider;
+
+    public PrototypeBean getPrototypeInstance() {
+        return myPrototypeBeanProvider.get();
+    }
+}
+
+We use Provider interface to inject the prototype bean. For each getPrototypeInstance() method call, the myPrototypeBeanProvider.get() method returns a new instance of PrototypeBean.
+
+
+
+-------------------------------------------------------------------------------------------------
+try (PHXPreparedStatement stmt = conn.preparePhxStatement(FIND_SETTLEMENT_ACTIVITY_CAD)) {
+    stmt.setString(1, runDate);
+    PHXResultSet rs = stmt.executePhxQuery();
+    while (rs.next()){
+        PayFacSettlementActivity payFacSettlementActivity = new PayFacSettlementActivity();
+        payFacSettlementActivity.setPayFacId(rs.getOid("PAY_FAC_ID"));
+        String actionType = rs.getString("ACTION_TYPE");
+        payFacSettlementActivity.setRecordIdentifier(rs.getString("RECORD_IDENTIFIER"));
+        activityList.add(payFacSettlementActivity);
+    }
+}
+catch (SQLException se) {
+    PHXException pe = new PHXException();
+    pe.initChangeTypeAndEventCode(se, "Problem finding activities", className + ".getPfifSettlementActivitiesForCAD-SQLException");
+    throw pe;
+}
+
+-----------------------------------------------------------------------------------------------------
+
 
