@@ -1,0 +1,176 @@
+JWT notes
+
+pom.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.5.1</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.springsecurityjwt</groupId>
+	<artifactId>security</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>security</name>
+	<description>Demo project for Spring Boot + JWT</description>
+	<properties>
+		<java.version>1.8</java.version>
+	</properties>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt</artifactId>
+			<version>0.9.1</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/javax.xml.bind/jaxb-api
+		Use this dependency only if using JAVA 9 or higher version. Removed from JDK 9
+		-->
+		<dependency>
+			<groupId>javax.xml.bind</groupId>
+			<artifactId>jaxb-api</artifactId>
+			<version>2.3.0</version>
+		</dependency>
+
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+
+
+
+
+
+
+
+
+
+
+controller
+
+
+package com.springsecurityjwt.controller;
+
+import com.springsecurityjwt.model.AuthenticationRequest;
+import com.springsecurityjwt.model.AuthenticationResponse;
+import com.springsecurityjwt.service.MyUserDetailsService;
+import com.springsecurityjwt.util.JwtUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class Controller {
+
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private MyUserDetailsService userDetailsService;
+
+    @Autowired
+    private JwtUtil jwtTokenUtil;
+
+    @GetMapping("/hello")
+    public String hello() {
+        return "Hello World";
+    }
+
+    /*
+    Accepts user id and password
+    returns JWT as response
+    POST - usersending username and password in post body
+    Can not call /authenticate without using username and password - permit all /authenticate requests using configure(HttpSecurity http)
+    in SecurityCOnfigurer class
+     */
+
+    @PostMapping("/authenticate")
+    public ResponseEntity<?> createAuthenticationRequest(@RequestBody AuthenticationRequest request) throws Exception {
+        //1st authenticate
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            throw new BadCredentialsException("Incorrect username or pssword", e);
+        }
+        //2nd create jwt
+        //need userdetails, get userdetails using userdetailsservice
+        final UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
+        final String jwt = jwtTokenUtil.generateToken(userDetails);
+        return ResponseEntity.ok(new AuthenticationResponse(jwt));
+    }
+
+    /* Second step (To authenticate /hello API with JWT token)
+    Send token in Bearer
+    Intercept all incoming requests
+    - extreact JWT from the header (Bearer)
+    - validate and set in execution context
+     */
+
+}
+
+
+
+
+
+jwtrequest filter
+
+package com.springsecurityjwt.filters;
+
+import com.springsecurityjwt.service.MyUserDetailsService;
+import com.springsecurityjwt.util.JwtUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import javax.servlet.FilterChain;
+import javax.ser<!doctype html> <html lang="en"> <head> <meta charset="utf-8"> <meta http-equiv="x-ua-compatible" content="ie=edge"> <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"> <title>StackPath</title> <style> *{box-sizing: border-box;}*::before, *::after{box-sizing: border-box;}*:focus{outline: none;}html{-moz-osx-font-smoothing: grayscale;-ms-overflow-style: -ms-autohiding-scrollbar;-webkit-font-smoothing: antialiased;font-size: 16px;}body{background-color: #fff;color: #545963;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;font-weight: 400;line-height: 1.6;margin: 0;min-width: 20rem;}h1, p{margin: 0;padding: 0;}h1{font-size: 2rem;font-weight: 400;line-height: 1;}h1:not(:last-child){margin-bottom: 3rem;}p{font-size: 1rem;}p:not(:last-child){margin-bottom: 1.5rem;}a{color: #0934a0;text-decoration: none;}a:hover{color: #0934a0;text-decoration: underline;}table{border-collapse: collapse;margin-top: 3rem;width: 100%;}th, td{padding: 0.3125rem 0.3125rem 0 0.3125rem;vertical-align: top;}th:first-child, td:first-child{padding-left: 0;}th:last-child, td:last-child{padding-right: 0;}th{font-size: 0.75rem;font-weight: 400;text-align: left;text-transform: uppercase;}td{font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size: 0.875rem;}td:first-child{word-break: break-all;}form{margin-top: 3rem;text-align: center;}button, input{border-radius: 0.25rem;border: 0.0625rem solid transparent;display: block;font-family: inherit;font-size: 1rem;margin: 0 auto;max-width: 100%;padding: 0.625rem;text-align: center;}input{-moz-appearance: none;-webkit-appearance: none;background: #fff;border-color: #a4a8af;color: #000;margin-top: 1.5rem;width: 12.5rem;}button{-webkit-appearance: button;background: #0934a0;color: #fff;cursor: pointer;font-weight: 700;margin-top: 1rem;width: 6.25rem;}button:hover{background: #080086;color: #fff;}.error{color: #c00;font-size: 0.8125rem;padding-top: 0.3125rem;}.layout{-webkit-box-direction: normal;-webkit-box-orient: vertical;display: -webkit-box;display: flex;flex-flow: column;margin-left: auto;margin-right: auto;max-width: 43.75rem;min-height: 100vh;padding: 4rem 1rem;}.layout__main{margin-bottom: auto;}.layout__footer{margin-top: auto;padding-top: 3rem;text-align: center;}@media(max-width: 767px){h1{font-size: 2rem;}h1:not(:last-child){margin-bottom: 1.5rem;}table, tbody, tr, td{display: block;}table{margin-top: 1.5rem;}thead{display: none;}td{padding: 1.375rem 0 0.625rem 0;position: relative;}td::before{content: attr(data-title);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;font-size: 0.75rem;left: 0;position: absolute;text-transform: uppercase;top: 0;}form{margin-top: 1.5rem;}.layout{padding: 2rem 1rem;}}</style> </head> <body> <div class="layout"> <div class="layout__main"> <h1>Server Response Error</h1> <p> There was an unexpected error while trying to serve content from <strong>notepad.pw</strong>. As a result, this screen is not loading properly. Please try again in a few minutes, if the issue continues, contact the site owner for further assistance. </p> <table> <thead> <tr> <th>Reference ID</th> <th>IP Address</th> <th>Date and Time</th> </tr> </thead> <tbody> <tr> <td data-title="Reference ID">b614dc34d4d5c26e44ff27bde479cd85</td> <td data-title="IP Address">103.135.202.163</td> <td data-title="Date and Time">09/24/2023 02:24 PM UTC</td> </tr> </tbody> </table> </div> <div class="layout__footer"> Protected by <a href="https://www.stackpath.com/" target="_blank">StackPath</a> </div> </div> </body> </html> 
+
+==============================================================================================================
+
