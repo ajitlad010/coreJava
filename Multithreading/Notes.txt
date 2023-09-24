@@ -174,3 +174,785 @@ import javax.ser<!doctype html> <html lang="en"> <head> <meta charset="utf-8"> <
 
 ==============================================================================================================
 
+Hibernate:
+
+@Transactional(readOnly = false, rollbackFor = Exception.class)
+
+
+One to one example :
+
+Employee class : 
+@OneToOne(fetch = FetchType.LAZY, cascade =  CascadeType.ALL)
+@JoinColumn(name="profile_Id", referencedColumnName="id")
+ private Profile profile;
+
+
+Profile class:
+@OneToOne(mappedBy = "profile")
+private Employee employee;
+----------------------------------------------------------------------------------------------------------
+One to many example
+
+Employee class : 
+@OneToMany(mappedBy = "employee", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+private Set<EmployeeAddress> addressList;
+
+EmployeeAddress class :
+@ManyToOne(fetch = FetchType.LAZY, optional = false)
+ @JoinColumn(name = "emp_id", nullable = false)
+private Employee employee;
+
+
+add below annotations to ignore errors:
+@JsonIgnore
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+
+
+
+
+----------------------------------------------------------------------------------------------------------
+Custome query :
+
+@Query("SELECT e FROM Employee e LEFT JOIN e.profile "
+			+ " LEFT JOIN e.addressList WHERE LOWER(e.name) = LOWER(:name)")
+	public Employee findEmployeeDetails(@Param("name") String name);
+
+
+--------------------------------------------------------------------------------------------------------
+cache implementation:
+1. add dependency
+<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.sf.ehcache</groupId>
+            <artifactId>ehcache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>javax.cache</groupId>
+            <artifactId>cache-api</artifactId>
+        </dependency>
+
+2.  add ehcache.xml
+
+<ehcache>
+    <diskStore path="java.io.tmpdir" />
+ 
+    <defaultCache maxElementsInMemory="2000"
+            eternal="true"
+            overflowToDisk="false"
+            timeToLiveSeconds="1200" />
+             
+    <cache name="employeeCache"
+            maxElementsInMemory="2000"
+            eternal="false"
+            overflowToDisk="false"
+            timeToLiveSeconds="10000" />
+</ehcache>
+
+
+
+3. create config class CacheConfig :
+
+@Configuration
+@EnableCaching
+public class CacheConfig {
+ 
+}
+
+
+4. annotate method with cacheable
+
+@Cacheable(cacheNames="employeeCache", key="#name")
+
+--------------------------------------------------------------------------------------------------------
+
+spring jdbc 
+
+1. public int update(String query)
+	used to insert, update and delete records
+	 String query="insert into employee values(  
+    '"+e.getId()+"','"+e.getName()+"','"+e.getSalary()+"')";  
+    return jdbcTemplate.update(query);
+
+2. public int update(String query,Object... args)
+	used to insert, update and delete records using PreparedStatement using given arguments.
+String query="update employee set name=? where id=?";  
+return template.update(query,e.getName(),e.getId());  
+
+3. public void execute(String query)
+	used to execute DDL query.
+
+4. public T execute(String sql, PreparedStatementCallback action)
+	executes the query by using PreparedStatement callback.
+	String query="insert into employee values(?,?,?)";  
+    return jdbcTemplate.execute(query,new PreparedStatementCallback<Boolean>(){  
+    @Override  
+    public Boolean doInPreparedStatement(PreparedStatement ps)  
+            throws SQLException, DataAccessException {  
+              
+        ps.setInt(1,e.getId());  
+        ps.setString(2,e.getName());  
+        ps.setFloat(3,e.getSalary());  
+              
+        return ps.execute();  
+              
+    }  
+    })
+
+5. public T query(String sql, ResultSetExtractor rse)	
+	used to fetch records using ResultSetExtractor.
+	 return template.query("select * from employee",new ResultSetExtractor<List<Employee>>(){  
+    @Override  
+     public List<Employee> extractData(ResultSet rs) throws SQLException,  
+            DataAccessException {  
+      
+        List<Employee> list=new ArrayList<Employee>();  
+        while(rs.next()){  
+        Employee e=new Employee();  
+        e.setId(rs.getInt(1));  
+        e.setName(rs.getString(2));  
+        e.setSalary(rs.getInt(3));  
+        list.add(e);  
+        }  
+        return list;  
+        }  
+    });  
+  } 
+
+6. public List query(String sql, RowMapper rse)
+	used to fetch records using RowMapper.
+	return template.query("select * from employee",new RowMapper<Employee>(){  
+    @Override  
+    public Employee mapRow(ResultSet rs, int rownumber) throws SQLException {  
+        Employee e=new Employee();  
+        e.setId(rs.getInt(1));  
+        e.setName(rs.getString(2));  
+        e.setSalary(rs.getInt(3));  
+        return e;  
+    }  
+    });  
+}  
+
+--------------------------------------------------------------------------------------------------------
+
+spring jdbc examples in proj:
+
+in properties mention user name , pass, url
+@Bean(name="jdbcTemplate")
+Public DataSource sybaseDataSource() {
+	DataSourceBuilder dataSource = DatasourceBuilder.create().driveClassName(dbDrive).url(dbUrl).username(userName).password(password);
+	return dataSource.build();
+}
+
+
+
+1. For insert :
+MapSqlParameterSource parameters = new MapSqlParameterSource()
+.addValue("id", 1)
+.addValue("name", "ajit");
+final KeyHolder holder = new GeneratedKeyHolder();
+this.oracleNamedParameterJdbcTemplate.update(Query , parameters, holder, new String[] { "id" });
+Long id = holder.getKey() != null ? holder.getKey().longValue() : 0;
+
+2. For get
+jdbcTemplate.queryForObject("select * from employee where id = ?", new Object[]{id}, new RowMapper<Employee>() {
+@Override
+public Employee mapRow(Resultset rs, int rownumber) throws SqlException {
+		Employee e = new Employee();
+		e.setId(rs.getLong(1));
+		e.setName(rs.getString(2));
+		return e;
+	}
+});
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+@Immutable
+used for rad only tables
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Optimistic locking
+In this locking, the concurrent changes are avoided by using the versioning object. Version checks the version numbers or the timestamps to detect conflicting updates and to prevent lost updates.
+
+
+
+nth highest salary in sql :
+SELECT name, salary FROM #Employee e1 WHERE 3-1 = (SELECT COUNT(DISTINCT salary) FROM #Employee e2 WHERE e2.salary > e1.salary)
+
+
+
+
+===========================================================================================================================================================\
+
+
+Micro services -
+
+create 3 service applications
+
+Eureka configuration for service applications :
+1. Add dependency for spring-cloud-starter-eureka-netflix-client
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+		</dependency>
+2. Add spring-cloud version property
+	<spring-cloud.version>Greenwich.RELEASE</spring-cloud.version>
+3. add dependency-management 
+<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+4. Add property 
+spring.application.name=movie-service
+
+5. Use application name instead of hard coded URI
+
+6. @LoadBalancer at resttemplate bean
+
+7. Enable eureka client at application main@EnableEurekaClient
+
+------------------------------------------------------------------------------
+Create project for Eureka discovery sever: 
+1. Add dependency spring-cloud-starter-netflix-eureka-service (pom.xml)
+2. Add dependency management for spring cloud (pom.xml)
+3. Add property for spring-cloud.version - greenwich (pom.xml)
+4. Add property in properties file application.properties
+	eureka.client.register-with-eureka= false
+	eureka.client.fetch-registry=false
+And start the Eureka Discovery server
+
+---------------------------------------------------------------------------
+
+To call other micro service application 
+Syntax :  (Resttemplate autowire)
+
+EmployeeEntity entity = restTemplate.getForObject("http://EMPLOYEE-MAPPING-DATA-SERVICE/findEmployee/"+id, EmployeeEntity.class);
+
+---------------------------------------------------------------------------------------------------***********--------------------------------------------------------------------------------------------------
+
+Level 1 :
+Communication and service discovery
+
+Micro services Level 2:
+Fault tolerance and Resiliance :
+
+1. Fault tolerance :
+	what if a microservice goes down, what is the impact of the fault, and the tolerance.
+2. Resiliance :
+	how many faults a system can tolerate describes resiliance
+
+1. If a service is taking too long to respond causes other services slow
+	because when a request comes in tomcat creates new thread and after returning response thread dies.
+	if a service is slow then new thread will get created as per api calls, and once concurrent thread capacity reaches to maximum causes other service API to 
+	wait for a thread and makes other services slow
+Solution 1 :
+	1. Adding time outs
+	@Bean
+	@LoadBalanced
+	public RestTemplate getRestTemplate() {
+		HttpComponentsClientHttpRequestFactory clientHttpRequestFactory = new HttpComponentsClientHttpRequestFactory();
+		clientHttpRequestFactory.setConnectTimeout(3000);
+		return new RestTemplate(clientHttpRequestFactory);
+	}
+
+After adding timeout of 3 second , if multiple API calls getting in 3 second same problem can occur again.
+
+Solution 2 :
+If service is slow, then hold other requests to call and once the service recovers then process requets as usual.
+Temporary solution, to wait for some time. Temporarily stop the requests.
+
+Circuit breaker pattern :
+1. Last n requests to consider for decision 5
+2. how many of those should fail  3
+3. Timeout duration : 2s
+4. how long to wait (sleep window) : 10s
+
+Fallback mechanism (when we hold on to call requests ):
+1. Throw an error
+2. return a default fallback response
+3. save previous responses(cache) and use that when possible
+
+Automatic recovery 
+
+1. Hystrix
+open source library created by netflix
+implements circuit breaker parameter
+give it the configuration parameter and it does work
+works well with spring boot
+x
+Steps:
+1. add maven dependency spring-cloud-starter-netflix-hystrix
+2. add annotation in main class
+	@EnableCircuitBreaker
+
+3. Add @HystrixCommand to methods that needs circuit breakers
+
+4. configure hystrix behaviour
+exmample :
+	@PostMapping("/findEmployeeDetails")
+	@HystrixCommand(fallbackMethod="getFallBackEmployeeDetails")
+	public Employee findEmployeeDetails(@RequestParam("name") String name) {
+		
+		String id = "2";
+		EmployeeEntity entity = restTemplate.getForObject("http://EMPLOYEE-MAPPING-DATA-SERVICE/findEmployee/"+id, EmployeeEntity.class);
+		Employee e = new Employee(Long.valueOf(entity.getId()), entity.getName(), 0L, 1L, null, null);
+		if(e != null) {
+			return e;
+		} else {
+			throw new EmployeeNotFoundException();
+		}
+	}
+
+if above micro service is not working then have to provide the fallback method with same signature and provide the name of fallback method in hystrixCommand
+	
+	public Employee getFallBackEmployeeDetails(@RequestParam("name") String name) {
+		return new Employee(0L, "Fallback employee", 0L, 0L, null, null);
+	}
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+Level 3 : Configurations
+Features of spring boot and micro services.
+DB connections
+Credentials
+Feature Flags
+Business logic configuration parameters
+Scenario testing
+spring boot cofiguration
+---------------------------------------------------
+
+1. Using external properties file:
+create properties file at same path of .jar file
+it overwrites the properties file.
+2. Can pass arguments with command line.
+eg. java -jar myApp.jar --my.greeting="Hi from cmd line"
+3.if value not available in properties file will get error while creating bean
+ can provide default value if property not present (using : )
+@Value("${my.greeting : greeting from defalt val}")
+4. can add list in property file also
+my.proplit = one,two,three
+---------------------------------------------------
+@ConfigurationProperties
+Create class with above annotation with @Configuration and read all properties from prop file.
+eg. @ConfigurationProperties("db")
+read all properties from prop file which starts with db
+---------------------------------------------------
+Actuator :
+Exposes rest end point to where we can get all configuration properties that exposes in app by ourself or by spring boot app
+Steps: 
+1. add dependency
+2. management.endpoints.web.exposure.include=* #to expose all end points by actuator
+
+localhost:8080/actuator/configprops
+---------------------------------------------------
+YAML fles:
+
+Yet another mark up Language -> YAML Aint Markup Language : to store data elements
+syntax :
+key:value
+replace properties file to yaml file and replace = with :
+Text considered as string
+eg. management.endpoints.web.exposure.include : "*"
+Advantage :
+
+app :
+	name : myApp
+	desription:Welcome description
+
+No need to repeat app name
+
+===================================================================================================================================
+
+Micro services 2 
+Level 1 :
+Communication and service discovery
+
+Micro services Level 2:
+Fault tolerance and Resiliance :
+
+1. Fault tolerance :
+	what if a microservice goes down, what is the impact of the fault, and the tolerance.
+2. Resiliance :
+	how many faults a system can tolerate describes resiliance
+
+1. If a service is taking too long to respond causes other services slow
+	because when a request comes in tomcat creates new thread and after returning response thread dies.
+	if a service is slow then new thread will get created as per api calls, and once concurrent thread capacity reaches to maximum causes other service API to 
+	wait for a thread and makes other services slow
+Solution 1 :
+	1. Adding time outs
+	@Bean
+	@LoadBalanced
+	public RestTemplate getRestTemplate() {
+		HttpComponentsClientHttpRequestFactory clientHttpRequestFactory = new HttpComponentsClientHttpRequestFactory();
+		clientHttpRequestFactory.setConnectTimeout(3000);
+		return new RestTemplate(clientHttpRequestFactory);
+	}
+
+After adding timeout of 3 second , if multiple API calls getting in 3 second same problem can occur again.
+
+Solution 2 :
+If serice is slow, then hold other requests to call and once the service recovers then process requets as usual.
+Temporary solution, to wait for some time. Temporarily stop the requests.
+
+Circuit breaker pattern :
+1. Last n requests to consider for decision 5
+2. how many of those should fail  3
+3. Timeout duration : 2s
+4. how long to wait (sleep window) : 10s
+
+Fallback mechanism (when we hold on to call requests ):
+1. Throw an error
+2. return a default fallback response
+3. save previous responses(cache) and use that when possible
+
+Automatic recovery 
+
+1. Hystrix
+open source library created by netflix
+implements circuit breaker parameter
+give it the configuration parameter and it does work
+works well with spring boot
+
+Steps:
+1. add maven dependency spring-cloud-starter-netflix-hystrix
+2. add annotation in main class
+	@EnableCircuitBreaker
+
+3. Add @HystrixCommand to methods that needs circuit breakers
+
+4. configure hystrix behaviour
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+Level 3 : Configurations
+Features of spring boot and micro services.
+DB connections
+Credentials
+Feature Flags
+Business logic configuration parameters
+Scenario testing
+spring boot cofiguration
+---------------------------------------------------
+
+1. Using external properties file:
+create properties file at same path of .jar file
+it overwrites the properties file.
+2. Can pass arguments with command line.
+eg. java -jar myApp.jar --my.greeting="Hi from cmd line"
+3.if value not available in properties file will get error while creating bean
+ can provide default value if property not present (using : )
+@Value("${my.greeting : greeting from defalt val}")
+4. can add list in property file also
+my.proplit = one,two,three
+---------------------------------------------------
+@ConfigurationProperties
+Create class with above annotation with @Configuration and read all properties from prop file.
+eg. @ConfigurationProperties("db")
+read all properties from prop file which starts with db
+---------------------------------------------------
+Actuator :
+Exposes rest end point to where we can get all configuration properties that exposes in app by ourself or by spring boot app
+Steps: 
+1. add dependency
+2. management.endpoints.web.exposure.include=* #to expose all end points by actuator
+
+localhost:8080/actuator/configprops
+---------------------------------------------------
+YAML fles:
+
+Yet another mark up Language -> YAML Aint Markup Language : to store data elements
+syntax :
+key:value
+replace properties file to yaml file and replace = with :
+Text considered as string
+eg. management.endpoints.web.exposure.include : "*"
+Advantage :
+
+app :
+	name : myApp
+	desription:Welcome description
+
+No need to repeat app name
+
+
+
+
+
+======================================================================================================
+
+Rest :
+Difference between 
+@Getmapping
+	Can be bookmarked
+	Can be cached
+	Parameters remain in browser history
+	Restrictions on data length
+	Data is visible to everyone in the URL
+
+@Postmapping
+	Not cached
+	Cannot be bookmarked
+	Parameters are not saved in browser history
+	No Restrictions on data length
+	Data is not displayed in the URL
+
+The difference between POST and PUT is that PUT requests are idempotent.
+That is, calling the same PUT request multiple times will always produce the same result.
+In contrast, calling a POST request repeatedly have side effects of creating the same resource multiple times.
+
+----------------------------------------------------------------------------
+localhost:8080/findAllEmployeesPost/1?name="ajit"
+@PathVariable  : 1
+@RequestParam : after ? 
+
+
+==========================================================================================================
+Java
+
+1. Singleton :
+	1. Prevent from threadSafety : using synchronized method getInstance
+2. Bucket :
+
+3. Segment :
+
+4. Load Factor:
+	Default load factor for hash map is 0.75
+	16*0.75 = 12 
+	When 13th element is inserted into hashmap it creates new hash map and re hashing will be done
+
+===========================================================================================================
+
+
+Spring - 
+1. Bean scopes : singleton, prototype, request, session, global
+
+Default : SingleTon
+@Autowired : Default type is byType (if more beans of same type defined then exception will be thrown)
+
+---------------------------------------------------------------------------------
+2. Dependency Injection : 
+a. Dependency Injection using Constructor way:
+<bean id = "employee" class = "com.javatpoint.Employee">
+	<constructor-arg type="int" value = "20"></constructor-arg>
+	<constructor-arg value = "ajit"></constructor-arg>
+</bean>
+
+
+b. Using list/map in bean creatinon (Setter Way)  :
+
+<bean id="employee" class = "com.javatpoint.Employee" scope="prototype">
+		<property name="id" value="1"></property>
+		<property name="departments">
+			<list>
+				<value>"JAVA"</value>
+			</list>
+		</property>
+		<property name="skillSet">
+			<map>
+				<entry key="1" value="JAVA"/>
+			</map>
+		</property>
+	</bean>
+
+c. Autowied : 
+Types : 	1. byName
+		2. byType (only one child bean of same type is created, if multiple beans of same type are present then exception will be thrown)
+		3. constructor
+
+<bean id = "employee"  class="com.javatpoint.Employee" autowire="byName">
+</bean>
+<bean id = "employeeDetails" class="com.javatpoint.EmployeeDetails">
+	<property name="address" value="Pune"></property>
+</bean>
+
+--------------------------------------------------------------------------------
+3. Bean lifecycle
+
+Interfaces :
+a. initializing bean (AbstractApplicationContext) :
+	override afterpropertiesset method
+	registershutdownhook-> destroy is called
+b. DisposableBean
+	override destroy() method
+c. init-method="myInit" in config xml file
+d. destroy-method="myDestroy" in config xml file
+e. to add init destroy method at global level
+	<beans default-init-method = "myInit" default-destroy-method="myDestroy">
+	</beans>
+f. Order of execution of initializing bean and init methods
+	1. initializing bean-> properties Set
+	2. init - myInit method
+	3. Disposal Bean-> destroy method
+	4. destroy - myDestroy method
+
+g. BeanPostProcessor interface : Executes after/before every bean initializes
+	1. PostProcessAfterInitialization(Object bean, String beanName)
+	2. PostProcessBeforeInitialization(Object bean, String beanName)
+
+h. BeanFactoryPostProcessor interface : Executes After Bean factory initializes (Though we are using applicationContext still works as ApplicationContext built upon the build factory)
+	1. postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory)
+
+i. To read property from other properties file
+	"${pointA.pointX}"
+<bean class="org.springframework.beans.factory.config.propertyPlaceHolderConfigurer">
+	<property name = "locations" value="pointsConfig.properties"/>
+</bean>
+j. ApplicationContextAware interface :
+	Provides context in Bean by overriding method setApplicationContext(ApplicationContext args0)
+--------------------------------------------------------------------------------
+4. Some useful annotations:
+a. @Required  (Requires BeanPostProcessor bean in xml file as this does the background validation)
+	to validate the bean 
+b. @Autowired
+	first try to find bean byType and then byName (if multiple beans of same name present in spring.xml file then exception)
+c. @Qualifier
+	if there are multiple beans of same type then use qualifier annotation so that context will inject bean byName
+d. @Resource (JSR annotation)
+	Injection by Name
+	syntax : @Resource(name="employeeDetails")
+
+e. @PostConstruct
+f.  @PreDestroy
+g. @Component :
+	to consider a class as bean (used at class level)
+--------------------------------------------------------------------------------
+Spring AOP : 
+Steps: 
+1. add 5 jars: Aspectjrt, aspectweaver, cglib, Aopalliance, asm
+2. Aspect contains no. of advices
+3. Convert standard class into aspect class : @Aspect
+	<aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+	Before method execution
+Annotations :
+
+1. Before method of this name : 
+	@Before("execution(public String getName())")
+2. Only for getname method of circle class
+	@Before("execution(public String com.ajit.Circle.getName())")
+
+
+2. PointCuts and WildCards:
+	wildcard : 
+	@Before("execution(public * get*())")  <---  PointCuts defining for advices
+	Will run advice before any return type , but method name starts with get
+	
+	@Pointcut("execution(* get*())")
+	public void allGetters() {}
+	Use "allGetters"(which is created as dummy method to use as pointcut for all point cuts)  as pointcut expression to match multiple adivces
+	@Before("allGetters")
+	public void testGetter() {
+		sysout("A");
+	}
+
+	@Pointcut("within(com.ajit.Circle)")
+	public void allCircleMethods() {}
+	Use allCircleMethods as point cut to run all methods within class circle
+
+JoinPoint : 
+1. That prints the details of the method which is getting executed (joinPoint.toString())
+2. target : That gets the Object of which method is getting executed
+		
+public void LoggingAdvice(JoinPoint joinPoint) {
+	System.out.println(joinPoint.toString())
+}
+@Before("args(name)")		<== to get the parameter value which we are passing (pointcut  -> all method that takes argument as => name)
+public voif setMethodAdvice(String name) {
+	System.out.println("Set method called , value is " + name)
+}
+
+	@After("args(name)")
+	executes after method
+	
+	@AfterReturning("args(name)")
+	executes after method if it executes without any exception
+
+	@AfterReturning(pointcut="args(name)", returning="returnString")		//executes after method those which sets argument name  and returns string
+	public void setMethodAdvice(String name, String returnString) {
+		System.out.println("Value + " name + "return string value : " + returnString);		
+	}
+
+	
+	@AfterThrowing("args(name)")
+	executes after throwing exception , can catch exception here also
+	@AfterThrowing(pointcut= "args(name)", throwing="ex") 	// can get the exception here also
+	
+	@Around("allGetters")						// gets executed before and after execution of method
+	public void myAroundAdvice(ProceedingJoinPoint proceedingJoinPoint) {
+		try {
+			System.out.println("Before advice");
+			proceedingJoinPoint.proceed();			// can get the return value of executing method using Object return = proceedingJoinPoint.proceed();
+			System.out.println("After advice");
+		} catch (Exception e) {
+			System.out.println(e);
+		} 
+		System.out.println("MyAround Advice");
+	}
+	
+	
+--------------------------------------------------------------------------------
+5. Spring transaction Management
+	a) Transaction propogation :
+		1. Required: Code will always run in a transaction. Creates a new transaction or reuses one if available.
+		2. Requires_new: Code will always run in a new transaction. Suspends the current transaction if one exists.
+		3. Mandatory : method must run within a transaction. If no existing transaction is in progress, an exception will be thrown
+		4. Not_Supported : If DataSourceTransactionObject T1 is already started for Method M1.If another method M2 is run concurrently .
+						Then M2 should not run within transaction context. T1 is suspended till M2 is finished.
+		5. Never : None of the methods run in transaction context.
+
+	b) Scenarios :
+	a. Dirty reads - If T1 transaction reads data from table A1 that was written by another concurrent transaction T2.If on the way T2 is rollback,the data obtained by T1 is invalid one
+	b. Non repeatable reads - If T1 transaction reads data from table A1.If another concurrent transaction(T2) update data on table A1.Then the data that T1 has read is different from table A1
+	c. Phantom reads - If T1 transaction reads data from table A1 with certain number of rows. If another concurrent transaction(T2) inserts more rows on table A1
+
+	c) isolation levels :
+	1. ISOLATION_READ_UNCOMMITTED 
+	2. ISOLATION_READ_COMMITTED
+	3. ISOLATION_REPEATABLE_READ
+	4. ISOLATION_SERIALIZABLE
+
+--------------------------------------------------------------------------------
+context.registershutdownhook();
+- for registering shut down hook , this invokes when main method gets completed it calls destroy method for clean up.
+--------------------------------------------------------------------------------
+Bean inheritance : The child bean automatically inherits the properties from parent bean.
+ Below example, childTriangle inherits pointA from parent.
+
+  <bean id = "parentTriangle" class = "com.ajit.Triangle">
+      <property name = "pointA" ref="pointOne"/>
+   </bean>
+
+   <bean id ="childTriangle" class = "com.ajit.Triangle" parent = "parentTriangle">
+      <property name = "pointB" value = "pointTwo"/>
+   </bean>
+
+--------------------------------------------------------------------------------
+<context:annotation-config/> to use annotation based spring
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
